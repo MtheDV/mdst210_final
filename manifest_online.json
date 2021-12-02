@@ -1,0 +1,6 @@
+{
+  "description": "Gradient dataset, 64x64",
+  "model": "https://raw.githubusercontent.com/MtheDV/mdst210_final/main/assets/SmoothedGenerator_10000_tfjs/model.json",
+  "modelSize": 128,
+  "modelLatentDim": 128
+}

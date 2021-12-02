@@ -1,10 +1,25 @@
+/**
+ * MDST 210 Final Project
+ * - Built by Mathew de Vin
+ * DCGAN training done on small gradient dataset (~8 hours)
+ * with a 128x128 image output
+ *
+ * To modify the number of latents/images generated, and number of images
+ * between each latent/image, modify the `numberOfGeneratedImages` and
+ * `generatedImageFrequency` respectively
+ */
+
+// noprotect
 p5.disableFriendlyErrors = true;
 
+// VARIABLES
 let dcgan;
 let canvas;
 let density;
 
 let showUI = false;
+let displayGeneratingUI = true;
+let totalGeneratedImages = 0;
 
 let generatedImages = [];
 let generatedImagesWidth = 128;
@@ -22,7 +37,6 @@ let fft;
 let oscillatorMouse;
 let oscillatorKeyboard;
 let oscillatorKeyboardFreq = 100;
-let xOffsetFromFreq = 0;
 let maxOscillatorFreq = 400;
 let minOscillatorFreq = 100;
 
@@ -31,10 +45,17 @@ let noiseMouseY = 0;
 let noiseMouseXTo = 0;
 let noiseMouseYTo = 0;
 
+/**
+ * Load DCGAN training data
+ */
 function preload() {
-  dcgan = ml5.DCGAN('manifest.json');
+  dcgan = ml5.DCGAN('manifest_online.json');
 }
 
+/**
+ * Setup canvas, create oscillators, and start generating images
+ * @return {Promise<void>}
+ */
 async function setup() {
   canvas = createCanvas(755, 720);
   density = pixelDensity();
@@ -53,6 +74,7 @@ async function setup() {
   console.log('Loading DCGAN Generated Images...');
   await generateImages().then(() => {
     console.log('Ready! Generated', generatedImages.length, 'images.');
+    displayGeneratingUI = false;
   });
 }
 
@@ -107,6 +129,7 @@ function addGeneratedImageToImages(err, result) {
   }
   result.image.resize(generatedImagesWidth, generatedImagesHeight);
   generatedImages.push(result.image);
+  totalGeneratedImages++;
   console.log('New Image #', generatedImages.length);
 }
 
@@ -114,27 +137,23 @@ function draw() {
   background(255);
   
   // MOUSE MOVEMENTS
-  noiseMouseX = lerp(noiseMouseX, noiseMouseXTo, 0.01);
-  noiseMouseY = lerp(noiseMouseY, noiseMouseYTo, 0.01);
+  noiseMouseX = lerp(noiseMouseX, noiseMouseXTo, 0.05);
+  noiseMouseY = lerp(noiseMouseY, noiseMouseYTo, 0.05);
   
   // SOUNDS
+  // set the frequency and amplitude for oscillator that follows the `noiseMouseX` and `noiseMouseY`
   let freq = constrain(map(noiseMouseX, 0, width, minOscillatorFreq, maxOscillatorFreq), minOscillatorFreq, maxOscillatorFreq);
   let amp = constrain(map(noiseMouseY, height, 0, 0, 1), 0, 1);
-  
+  // apply values to both oscillators
   oscillatorMouse.freq(freq, 0.2);
   oscillatorMouse.amp(amp, 0.3);
-  oscillatorKeyboard.amp(amp, 0.1);
-  xOffsetFromFreq = oscillatorKeyboard.getFreq();
-  
-  if (xOffsetFromFreq > maxOscillatorFreq) xOffsetFromFreq = maxOscillatorFreq;
   oscillatorKeyboard.freq(oscillatorKeyboardFreq, 0.4);
+  oscillatorKeyboard.amp(amp, 0.1);
   
-  // UPDATING PIXELATION BASED ON FREQUENCY
-  pixelateFactor = Math.ceil(pixelateFactorMax - map(oscillatorMouse.getFreq(), minOscillatorFreq, maxOscillatorFreq, pixelateFactorMin, pixelateFactorMax));
-  if (pixelateFactor > pixelateFactorMax) pixelateFactor = pixelateFactorMax;
-  if (pixelateFactor < 1) pixelateFactor = 1;
+  // UPDATING PIXELATION BASED ON FREQUENCY OF FIRST OSCILLATOR
+  pixelateFactor = Math.ceil(constrain(pixelateFactorMax - map(oscillatorMouse.getFreq(), minOscillatorFreq, maxOscillatorFreq, pixelateFactorMin, pixelateFactorMax), 1, pixelateFactorMax));
   
-  // IMAGE TRANSITION SPEED BASED ON AMPLITUDE
+  // IMAGE TRANSITION SPEED BASED ON AMPLITUDE OF FIRST OSCILLATOR
   selectedImageIndex += oscillatorMouse.getAmp();
   if (selectedImageIndex >= generatedImages.length) {
     selectedImageIndex = 0;
@@ -167,8 +186,12 @@ function draw() {
   }
   
   // DISPLAY UI ELEMENTS FOR INFORMATION
+  fill(0);
+  if (displayGeneratingUI) {
+    text('Loading DCGAN Generated Images...', 20, 20);
+    text(`Generated Images ${totalGeneratedImages}/${((numberOfGeneratedImages/generatedImageFrequency)+(1/generatedImageFrequency))}`, 20, 40);
+  }
   if (showUI) {
-    fill(0);
     text(`Pixel Factor: ${pixelateFactor.toString()}`, 20, 20);
     text(`Oscillator Freq: ${oscillatorMouse.getFreq()}`, 20, 40);
     text(`Oscillator Amp: ${oscillatorMouse.getAmp()}`, 20, 60);
@@ -223,10 +246,15 @@ function writeColor(image, x, y, red, green, blue, alpha) {
   image.pixels[index + 3] = alpha;
 }
 
+/**
+ * If a key is pressed (Keys 0-9), then change the second oscillator frequency
+ * and modify the `noiseMouseX` and `noiseMouseY` values to a position based on
+ * the index of the keys
+ */
 function keyPressed() {
   for (let i = 0; i < 10; ++i) {
     if (keyCode - 48 === i) {
-      // If a ket from 0 to 9 is pressed, change the keyboard oscillator frequency and mouse coordinates
+      // If a key from 0 to 9 is pressed, change the keyboard oscillator frequency and mouse coordinates
       oscillatorKeyboardFreq = ((maxOscillatorFreq - minOscillatorFreq) / 10 * i) + 1;
       noiseMouseXTo = ((width / 10) * i) + (Math.random() * (width / 10));
       noiseMouseYTo = (Math.random() * height);
