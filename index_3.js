@@ -46,7 +46,7 @@ let generatedImages = [];
 let generatedImagesWidth = 128;
 let generatedImagesHeight = 128;
 let numberOfGeneratedImages = 3;
-let generatedImageFrequency = 0.02;
+let generatedImageFrequency = 0.01;
 let selectedImageIndex = 0;
 
 // Pixelation
@@ -91,12 +91,12 @@ async function setup() {
   noiseIndexAdditiveSlider = createSlider(0, 0.1, 0.005, 0.005);
   noiseIndexAdditiveSlider.position(width + 50, 45);
   
-  selectedImageSpeedSlider = createSlider(0, 2, 1, 0.1);
+  selectedImageSpeedSlider = createSlider(0, 2, 1, 0.5);
   selectedImageSpeedSlider.position(width + 50, 70);
   
-  minPosterizeVal = createSlider(2, 12, 2, 1);
+  minPosterizeVal = createSlider(2, 255, 2, 1);
   minPosterizeVal.position(width + 50, 110);
-  maxPosterizeVal = createSlider(2, 12, 12, 1);
+  maxPosterizeVal = createSlider(2, 255, 255, 1);
   maxPosterizeVal.position(width + 50, 135);
   
   pixelateFactorMinSlider = createSlider(pixelateFactorMin, pixelateFactorMax, pixelateFactorMin, 1);
@@ -172,7 +172,7 @@ function draw() {
   noiseIndex += noiseIndexAdditiveSlider.value();
   
   // UPDATING PIXELATION BASED ON NOISE
-  pixelateFactor = Math.floor(constrain(pixelateFactorMax - map(noise(noiseIndex * 2), 0, 1, pixelateFactorMinSlider.value(), pixelateFactorMaxSlider.value()), pixelateFactorMinSlider.value(), pixelateFactorMaxSlider.value()));
+  pixelateFactor = Math.floor(constrain(pixelateFactorMax - map(noise(noiseIndex), 0, 1, pixelateFactorMinSlider.value(), pixelateFactorMaxSlider.value()), pixelateFactorMinSlider.value(), pixelateFactorMaxSlider.value()));
   
   // IMAGE TRANSITION SPEED
   selectedImageIndex += selectedImageSpeedSlider.value();
