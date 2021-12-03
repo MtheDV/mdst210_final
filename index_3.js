@@ -1,12 +1,24 @@
 /**
  * MDST 210 Final Project
  * - Built by Mathew de Vin
- * DCGAN training done on small gradient dataset (~8 hours)
- * with a 128x128 image output
+ * DCGAN training done on small gradient dataset (~8 hours) (~50 images)
+ * with a 128x128px image output
  *
  * To modify the number of latents/images generated, and number of images
  * between each latent/image, modify the `numberOfGeneratedImages` and
  * `generatedImageFrequency` respectively
+ *
+ * The sliders modify the following values:
+ *   1. Image alpha
+ *   2. Noise additive speed
+ *   3. Image transition speed
+ *   4. Minimum posterize value
+ *   5. Maximum posterize value
+ *   6. Minimum pixelate factor value
+ *   7. Maximum pixelate factor value
+ *
+ * To record the project, press the 'r' key, then press the 'r' key
+ * again to stop recording and download the frames
  */
 
 // noprotect
@@ -21,29 +33,35 @@ let showUI = false;
 let displayGeneratingUI = true;
 let totalGeneratedImages = 0;
 
+// Canvas Capture
+let capturer;
+let fps = 30;
+let recordVideo = false;
+
+// Noise
+let noiseIndex = 0;
+
+// Generated Images
 let generatedImages = [];
 let generatedImagesWidth = 128;
 let generatedImagesHeight = 128;
-let numberOfGeneratedImages = 2;
-let generatedImageFrequency = 0.5;
+let numberOfGeneratedImages = 3;
+let generatedImageFrequency = 0.02;
 let selectedImageIndex = 0;
 
+// Pixelation
 let pixelateFactor = 2;
 let pixelateFactorMin = 1;
-let pixelateFactorMax = 18;
-let pixelateNoiseX = 0;
+let pixelateFactorMax = 16;
 
-let fft;
-let oscillatorMouse;
-let oscillatorKeyboard;
-let oscillatorKeyboardFreq = 100;
-let maxOscillatorFreq = 400;
-let minOscillatorFreq = 100;
-
-let noiseMouseX = 0;
-let noiseMouseY = 0;
-let noiseMouseXTo = 0;
-let noiseMouseYTo = 0;
+// Sliders
+let alphaSlider;
+let noiseIndexAdditiveSlider;
+let selectedImageSpeedSlider;
+let minPosterizeVal;
+let maxPosterizeVal;
+let pixelateFactorMinSlider;
+let pixelateFactorMaxSlider;
 
 /**
  * Load DCGAN training data
@@ -57,20 +75,36 @@ function preload() {
  * @return {Promise<void>}
  */
 async function setup() {
-  canvas = createCanvas(755, 720);
-  density = pixelDensity();
+  // CANVAS SETUP
+  canvas = createCanvas(777, 720);
+  density = pixelDensity(1);
   background(255);
-  fill(0);
-  text('Loading DCGAN Generated Images...', 0, 20);
   
-  oscillatorMouse = new p5.Oscillator('triangle');
-  oscillatorMouse.start();
-  oscillatorMouse.amp(0.5, 0.2);
-  oscillatorKeyboard = new p5.Oscillator('sine');
-  oscillatorKeyboard.start();
-  oscillatorKeyboard.amp(0.1, 0.2);
-  fft = new p5.FFT();
+  // CANVAS CAPTURE
+  capturer = new CCapture({ format: 'png', framerate: fps});
+  frameRate(fps);
   
+  // SLIDERS
+  alphaSlider = createSlider(0, 255, 125, 1);
+  alphaSlider.position(width + 50, 20);
+  
+  noiseIndexAdditiveSlider = createSlider(0, 0.1, 0.005, 0.005);
+  noiseIndexAdditiveSlider.position(width + 50, 45);
+  
+  selectedImageSpeedSlider = createSlider(0, 2, 1, 0.1);
+  selectedImageSpeedSlider.position(width + 50, 70);
+  
+  minPosterizeVal = createSlider(2, 12, 2, 1);
+  minPosterizeVal.position(width + 50, 110);
+  maxPosterizeVal = createSlider(2, 12, 12, 1);
+  maxPosterizeVal.position(width + 50, 135);
+  
+  pixelateFactorMinSlider = createSlider(pixelateFactorMin, pixelateFactorMax, pixelateFactorMin, 1);
+  pixelateFactorMinSlider.position(width + 50, 175);
+  pixelateFactorMaxSlider = createSlider(pixelateFactorMin, pixelateFactorMax, pixelateFactorMax, 1);
+  pixelateFactorMaxSlider.position(width + 50, 200);
+  
+  // GENERATE IMAGES
   console.log('Loading DCGAN Generated Images...');
   await generateImages().then(() => {
     console.log('Ready! Generated', generatedImages.length, 'images.');
@@ -134,32 +168,20 @@ function addGeneratedImageToImages(err, result) {
 }
 
 function draw() {
-  background(255);
+  // NOISE VALUE
+  noiseIndex += noiseIndexAdditiveSlider.value();
   
-  // MOUSE MOVEMENTS
-  noiseMouseX = lerp(noiseMouseX, noiseMouseXTo, 0.05);
-  noiseMouseY = lerp(noiseMouseY, noiseMouseYTo, 0.05);
+  // UPDATING PIXELATION BASED ON NOISE
+  pixelateFactor = Math.floor(constrain(pixelateFactorMax - map(noise(noiseIndex * 2), 0, 1, pixelateFactorMinSlider.value(), pixelateFactorMaxSlider.value()), pixelateFactorMinSlider.value(), pixelateFactorMaxSlider.value()));
   
-  // SOUNDS
-  // set the frequency and amplitude for oscillator that follows the `noiseMouseX` and `noiseMouseY`
-  let freq = constrain(map(noiseMouseX, 0, width, minOscillatorFreq, maxOscillatorFreq), minOscillatorFreq, maxOscillatorFreq);
-  let amp = constrain(map(noiseMouseY, height, 0, 0, 1), 0, 1);
-  // apply values to both oscillators
-  oscillatorMouse.freq(freq, 0.2);
-  oscillatorMouse.amp(amp, 0.3);
-  oscillatorKeyboard.freq(oscillatorKeyboardFreq, 0.4);
-  oscillatorKeyboard.amp(amp, 0.1);
-  
-  // UPDATING PIXELATION BASED ON FREQUENCY OF FIRST OSCILLATOR
-  pixelateFactor = Math.ceil(constrain(pixelateFactorMax - map(oscillatorMouse.getFreq(), minOscillatorFreq, maxOscillatorFreq, pixelateFactorMin, pixelateFactorMax), 1, pixelateFactorMax));
-  
-  // IMAGE TRANSITION SPEED BASED ON AMPLITUDE OF FIRST OSCILLATOR
-  selectedImageIndex += oscillatorMouse.getAmp();
+  // IMAGE TRANSITION SPEED
+  selectedImageIndex += selectedImageSpeedSlider.value();
   if (selectedImageIndex >= generatedImages.length) {
     selectedImageIndex = 0;
   }
   
-  // DRAW GENERATED IMAGES AND APPLY PIXELATION TO THEM
+  // DRAW GENERATED IMAGES AND APPLY PIXELATION TO THEM FROM PIXELATEFACTOR
+  // APPLY POSTERIZE FILTER FOR EFFECT BASED ON NOISE
   if (generatedImages.length > 0) {
     let generatedImage = generatedImages[Math.floor(selectedImageIndex)];
     let duplicateGeneratedImage = createImage(width, height)
@@ -169,35 +191,40 @@ function draw() {
     const imageScaleHeight = Math.ceil(height / generatedImage.height);
     for (let y = 0; y < generatedImage.height; y += pixelateFactor) {
       for (let x = 0; x < generatedImage.width; x += pixelateFactor) {
-        const [red, green, blue, alpha] = getColor(generatedImage, x, y);
+        let [red, green, blue, alpha] = getColor(generatedImage, x, y);
+        alpha = alphaSlider.value();
         for (let pX = 0; pX < pixelateFactor * imageScaleWidth; ++pX) {
           for (let pY = 0; pY < pixelateFactor * imageScaleHeight; ++pY) {
             const sX = x * imageScaleWidth + pX;
             const sY = y * imageScaleHeight + pY;
-            if (sX < width && sY < height)
+            if (sX < width && sY < height) {
               writeColor(duplicateGeneratedImage, sX, sY, red, green, blue, alpha);
+            }
           }
         }
       }
     }
     duplicateGeneratedImage.updatePixels();
-    filter(POSTERIZE, constrain(map(oscillatorKeyboard.getFreq(), minOscillatorFreq, maxOscillatorFreq, 2, 15), 2, 15));
+    duplicateGeneratedImage.filter(POSTERIZE, constrain(map(noise(noiseIndex), 0, 1, minPosterizeVal.value(), maxPosterizeVal.value()), minPosterizeVal.value(), maxPosterizeVal.value()));
     image(duplicateGeneratedImage, 0, 0);
   }
   
   // DISPLAY UI ELEMENTS FOR INFORMATION
+  fill(255);
+  noStroke();
+  if (showUI || displayGeneratingUI) rect(0, 0, width, 60);
   fill(0);
   if (displayGeneratingUI) {
     text('Loading DCGAN Generated Images...', 20, 20);
-    text(`Generated Images ${totalGeneratedImages}/${((numberOfGeneratedImages/generatedImageFrequency)+(1/generatedImageFrequency))}`, 20, 40);
+    text(`Generated Images ${totalGeneratedImages}/${(numberOfGeneratedImages / generatedImageFrequency)}`, 20, 40);
   }
   if (showUI) {
     text(`Pixel Factor: ${pixelateFactor.toString()}`, 20, 20);
-    text(`Oscillator Freq: ${oscillatorMouse.getFreq()}`, 20, 40);
-    text(`Oscillator Amp: ${oscillatorMouse.getAmp()}`, 20, 60);
-    text(`Keyboard Oscillator Freq: ${oscillatorKeyboard.getFreq()}`, 20, 80);
-    text(`Keyboard Oscillator Amp: ${oscillatorKeyboard.getAmp()}`, 20, 100);
+    text(`Noise Index: ${noiseIndex}`, 20, 40);
   }
+  
+  // CAPTURE FRAME
+  capturer.capture(document.getElementById('defaultCanvas0'));
 }
 
 /**
@@ -247,17 +274,17 @@ function writeColor(image, x, y, red, green, blue, alpha) {
 }
 
 /**
- * If a key is pressed (Keys 0-9), then change the second oscillator frequency
- * and modify the `noiseMouseX` and `noiseMouseY` values to a position based on
- * the index of the keys
+ * If the 'r' key is pressed, then start recording. If it is
+ * pressed again, stop recording and download frames
  */
 function keyPressed() {
-  for (let i = 0; i < 10; ++i) {
-    if (keyCode - 48 === i) {
-      // If a key from 0 to 9 is pressed, change the keyboard oscillator frequency and mouse coordinates
-      oscillatorKeyboardFreq = ((maxOscillatorFreq - minOscillatorFreq) / 10 * i) + 1;
-      noiseMouseXTo = ((width / 10) * i) + (Math.random() * (width / 10));
-      noiseMouseYTo = (Math.random() * height);
+  if (keyCode === 82) {
+    if (recordVideo) {
+      capturer.save();
+    } else {
+      capturer.stop();
+      capturer.start();
     }
+    recordVideo = !recordVideo;
   }
 }
